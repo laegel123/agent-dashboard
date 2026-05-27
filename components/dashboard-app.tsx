@@ -19,6 +19,7 @@ import { Sidebar } from './dashboard-sidebar';
 import { DetailDrawer, initialChat } from './dashboard-detail';
 import { NewAgentModal, TimelineView, type NewAgentDraft } from './dashboard-modals';
 import { ToastHost, useToast } from './toast';
+import { EmptyState, type EmptyReason } from './dashboard-states';
 
 export type Layout = 'grid' | 'list' | 'timeline';
 type Filter = 'all' | Status;
@@ -184,20 +185,34 @@ export function App({ initialAgents }: AppProps) {
 
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
         <div style={{ flex: 1, overflow: 'auto', minWidth: 0 }}>
-          {layout === 'grid' && (
-            <GridBody
-              filtered={filtered} density={density}
-              onOpen={setSelectedId} onAction={onAction} selectedId={selectedId}
+          {filtered.length === 0 ? (
+            <EmptyState
+              reason={pickEmptyReason({ agents, query, filter, since })}
+              status={filter !== 'all' ? (filter as Status) : undefined}
+              query={query}
+              onClearSearch={() => setQuery('')}
+              onClearStatusFilter={() => setFilter('all')}
+              onShowAllTime={() => setSince('all')}
+              onNewAgent={() => setNewAgentOpen(true)}
             />
-          )}
-          {layout === 'list' && (
-            <ListBody
-              filtered={filtered} density={density}
-              onOpen={setSelectedId} onAction={onAction} selectedId={selectedId}
-            />
-          )}
-          {layout === 'timeline' && (
-            <TimelineView agents={filtered} onOpen={setSelectedId} selectedId={selectedId} />
+          ) : (
+            <>
+              {layout === 'grid' && (
+                <GridBody
+                  filtered={filtered} density={density}
+                  onOpen={setSelectedId} onAction={onAction} selectedId={selectedId}
+                />
+              )}
+              {layout === 'list' && (
+                <ListBody
+                  filtered={filtered} density={density}
+                  onOpen={setSelectedId} onAction={onAction} selectedId={selectedId}
+                />
+              )}
+              {layout === 'timeline' && (
+                <TimelineView agents={filtered} onOpen={setSelectedId} selectedId={selectedId} />
+              )}
+            </>
           )}
         </div>
         <Sidebar agents={agents} activity={activity} onSelectAgent={setSelectedId} />
@@ -220,6 +235,22 @@ export function App({ initialAgents }: AppProps) {
       <ToastHost />
     </div>
   );
+}
+
+// Empty 분기 결정.
+//  - agents 자체가 0 → 'no-cli-sessions' (Phase 4 에서 'no-projects-folder' 와 분리)
+//  - 검색 쿼리 있음 → 'search-empty'
+//  - status 필터 있음 → 'status-empty'
+//  - since !== 'all' 인데 결과 0 → 'time-range-empty'  (Phase 3 mock 에선 적용 안 되지만 로직은 살려둠)
+//  - 그 외 → 'no-match'
+function pickEmptyReason({
+  agents, query, filter, since,
+}: { agents: Agent[]; query: string; filter: Filter; since: SinceRange }): EmptyReason {
+  if (agents.length === 0) return 'no-cli-sessions';
+  if (query.trim()) return 'search-empty';
+  if (filter !== 'all') return 'status-empty';
+  if (since !== 'all') return 'time-range-empty';
+  return 'no-match';
 }
 
 // Mock canned reply — chat is preview-only in Phase 3.
@@ -519,7 +550,6 @@ interface BodyProps {
 }
 
 function GridBody({ filtered, density, onOpen, onAction, selectedId }: BodyProps) {
-  if (!filtered.length) return <EmptyState />;
   return (
     <div
       style={{
@@ -547,7 +577,6 @@ function GridBody({ filtered, density, onOpen, onAction, selectedId }: BodyProps
 }
 
 function ListBody({ filtered, density, onOpen, onAction, selectedId }: BodyProps) {
-  if (!filtered.length) return <EmptyState />;
   return (
     <div>
       <div
@@ -580,10 +609,3 @@ function ListBody({ filtered, density, onOpen, onAction, selectedId }: BodyProps
   );
 }
 
-function EmptyState() {
-  return (
-    <div style={{ padding: 80, textAlign: 'center', color: 'var(--ink-4)', fontSize: 14 }}>
-      No agents match your filters.
-    </div>
-  );
-}
