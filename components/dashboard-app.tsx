@@ -17,6 +17,7 @@ import { Icon } from './dashboard-utils';
 import { GridCard, ListRow, LIST_GRID_COLS, type CardAction, type Density } from './dashboard-card';
 import { Sidebar } from './dashboard-sidebar';
 import { DetailDrawer, initialChat } from './dashboard-detail';
+import { NewAgentModal, TimelineView, type NewAgentDraft } from './dashboard-modals';
 
 export type Layout = 'grid' | 'list' | 'timeline';
 type Filter = 'all' | Status;
@@ -46,11 +47,46 @@ export function App({ initialAgents }: AppProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activity] = useState<ActivityEvent[]>(MOCK_ACTIVITY);
   const [chats, setChats] = useState<Record<string, ChatMsg[]>>({});
+  const [newAgentOpen, setNewAgentOpen] = useState(false);
 
   const selectedAgent = useMemo(
     () => (selectedId ? agents.find((a) => a.id === selectedId) ?? null : null),
     [agents, selectedId]
   );
+
+  const onCreateAgent = useCallback((d: NewAgentDraft) => {
+    const slug = d.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const suffix = Math.floor(Math.random() * 90 + 10);
+    const idPrefix = d.model.split('-')[0];
+    const id = `${idPrefix}-${suffix}`;
+    const now = Date.now();
+    const agent: Agent = {
+      id,
+      name: slug || 'new-agent',
+      status: d.autoStart ? 'running' : 'idle',
+      task: d.task,
+      repo: d.repo,
+      branch: d.branch || (d.autoStart ? `feat/${slug || 'new-agent'}` : '—'),
+      step: 0,
+      steps: 4,
+      tokens: 0,
+      cost: 0,
+      model: d.model,
+      edited: 0,
+      started: d.autoStart ? 'just now' : '—',
+      last: d.autoStart ? 'spawned by you' : 'awaiting start',
+      // Stub meta — Phase 5 replaces with optimistic placeholder card backed by a real UUID.
+      sessionId: `mock-${id}-${now.toString(36)}`,
+      filePath: '',
+      cwd: '',
+      firstTimestamp: now,
+      lastTimestamp: now,
+      entrypoint: 'cli',
+    };
+    setAgents((list) => [agent, ...list]);
+    setNewAgentOpen(false);
+    setSelectedId(id);
+  }, []);
 
   const onChatSend = useCallback(
     (id: string, text: string) => {
@@ -124,7 +160,7 @@ export function App({ initialAgents }: AppProps) {
         color: 'var(--ink)', fontFamily: 'var(--sans)', position: 'relative',
       }}
     >
-      <TopBar totals={totals} onNew={() => { /* Phase 3.4 wires NewAgentModal */ }} />
+      <TopBar totals={totals} onNew={() => setNewAgentOpen(true)} />
       <FilterRow
         filter={filter} setFilter={setFilter}
         totals={totals}
@@ -148,9 +184,7 @@ export function App({ initialAgents }: AppProps) {
             />
           )}
           {layout === 'timeline' && (
-            <div style={{ padding: 80, textAlign: 'center', color: 'var(--ink-4)', fontSize: 14 }}>
-              Timeline view ships in Phase 3.4.
-            </div>
+            <TimelineView agents={filtered} onOpen={setSelectedId} selectedId={selectedId} />
           )}
         </div>
         <Sidebar agents={agents} activity={activity} onSelectAgent={setSelectedId} />
@@ -165,6 +199,10 @@ export function App({ initialAgents }: AppProps) {
           />
         )}
       </div>
+
+      {newAgentOpen && (
+        <NewAgentModal onClose={() => setNewAgentOpen(false)} onCreate={onCreateAgent} />
+      )}
     </div>
   );
 }
