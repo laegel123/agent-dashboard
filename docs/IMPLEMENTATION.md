@@ -10,37 +10,37 @@
 - [x] CLAUDE.md + docs/ 1차 작성
 - [x] 기획 이슈 발견 & 결정 (1세션=1카드, CLI only, spawn만 실동작, 7일 기본 필터)
 - [x] 모든 문서 결정사항 반영 재정비
-- [ ] 사용자 최종 검토 → Phase 1 진입
+- [x] 사용자 최종 검토 → Phase 1 진입
 
 **산출물**: CLAUDE.md + docs/ 8개 문서.
 
 ---
 
-## Phase 1 — 프로젝트 부팅
+## Phase 1 — 프로젝트 부팅 ✅ (commit `163e1e5`)
 
 > ⚠️ 사용자 동의 후 실행.
 
-- [ ] `npm install` (Next.js 15 · React 18 · TypeScript)
-- [ ] **`package.json` scripts 에 `--hostname 127.0.0.1` 추가** (ADR-015 보안):
+- [x] `npm install` (Next.js 15 · React 18 · TypeScript)
+- [x] **`package.json` scripts 에 `--hostname 127.0.0.1` 추가** (ADR-015 보안):
   ```json
   "dev":   "next dev --hostname 127.0.0.1",
   "start": "next start --hostname 127.0.0.1"
   ```
-- [ ] `app/layout.tsx` — next/font 로 Geist · Geist Mono · Instrument Serif 로딩
-- [ ] `app/globals.css` — `design-package/.../tokens.css` 이식 + Dashboard.html `<style>` 키프레임/스크롤바 합본
-- [ ] `app/page.tsx` 빈 셸 (`"use client"` + 로딩 텍스트)
-- [ ] `npm run dev` 에러 없이 부팅
+- [x] `app/layout.tsx` — next/font 로 Geist · Geist Mono · Instrument Serif 로딩
+- [x] `app/globals.css` — `design-package/.../tokens.css` 이식 + Dashboard.html `<style>` 키프레임/스크롤바 합본
+- [x] `app/page.tsx` 빈 셸 (`"use client"` + 로딩 텍스트)
+- [x] `npm run dev` 에러 없이 부팅
 
 **검증**: localhost:3000 에 베이지 배경 + "Loading…" 만 보이면 OK.
 
 ---
 
-## Phase 2 — 타입 & 상수 (`lib/`)
+## Phase 2 — 타입 & 상수 (`lib/`) ✅ (commit `142fe62`)
 
-- [ ] `lib/types.ts` — `Agent`, `Status`, `ChatMsg`, `ActivityEvent`, `JsonlRecord` (간소화 버전)
-- [ ] `lib/status-meta.ts` — `STATUS_META` 단일 출처
-- [ ] `lib/pricing.ts` — `PRICING`, `lookupPricing(model)` (prefix match), `calculateCost`, `shortModel`. **단가 출처 코멘트 + 검증일 표기**
-- [ ] `lib/format-time.ts` — `relativeTime(ts)`, `formatClock(ts)` 로컬 타임존 처리
+- [x] `lib/types.ts` — `Agent`, `Status`, `ChatMsg`, `ActivityEvent`, `JsonlRecord` (간소화 버전)
+- [x] `lib/status-meta.ts` — `STATUS_META` 단일 출처
+- [x] `lib/pricing.ts` — `PRICING`, `lookupPricing(model)` (prefix match), `calculateCost`, `shortModel`. **단가 출처 코멘트 + 검증일 표기** (2026-05-27)
+- [x] `lib/format-time.ts` — `relativeTime(ts)`, `formatClock(ts)` 로컬 타임존 처리
 
 **검증**: `npm run build` 통과. 타입 오류 없음.
 
@@ -50,28 +50,28 @@
 
 > 실데이터 연결 전, mock 18개로 디자인 100% 재현.
 
-### 3.1 유틸 & 카드
-- [ ] `lib/mock-data.ts` — 디자인 `mock-data.js` 18개 그대로 TS 변환. **⚠️ Phase 4 시작 시 완전 제거** (ADR-014)
-- [ ] `components/dashboard-utils.tsx` — `Icon` (디자인 원본 14개 + ★ `folder` 신규), `StatusDot`, `fmtTok`, `fmt$`
-- [ ] `components/dashboard-card.tsx` — `GridCard`, `ListRow`, `CardActions`, `BtnGhost`, `BtnPrimary`
-- [ ] `components/dashboard-app.tsx` — App + TopBar + FilterRow + GridBody + ListBody + EmptyState
-- [ ] `app/page.tsx` → `<App initialAgents={MOCK_AGENTS} />`
+### 3.1 유틸 & 카드 ✅ (commits `be5e2be`, `11331c6`, `f94f4c4`)
+- [x] `lib/mock-data.ts` — 디자인 `mock-data.js` 18개 그대로 TS 변환. **⚠️ Phase 4 시작 시 완전 제거** (ADR-014)
+- [x] `components/dashboard-utils.tsx` — `Icon` (디자인 원본 14개 + ★ `folder` 신규), `StatusDot`, `fmtTok`, `fmt$`
+- [x] `components/dashboard-card.tsx` — `GridCard`, `ListRow`, `CardActions`, `BtnGhost`, `BtnPrimary`
+- [x] `components/dashboard-app.tsx` — App + TopBar + FilterRow + GridBody + ListBody + EmptyState
+- [x] `app/page.tsx` → `<App initialAgents={MOCK_AGENTS} />`
 
 **검증**: 18 카드 그리드, 필터 칩, 검색, grid/list 전환 동작.
 
-### 3.2 사이드바
-- [ ] `components/dashboard-sidebar.tsx` — `Sidebar`, `CollabGraphWarm`, `ActivityFeedWarm`
-- [ ] 사이드바 우측 320px 폭, mock 6 노드 handoff 표시
-- [ ] **"demo data" 라벨** 사이드바 헤더에 추가 (UI_GUIDE 참조)
+### 3.2 사이드바 ✅ (commit `1a22eb6`)
+- [x] `components/dashboard-sidebar.tsx` — `Sidebar`, `CollabGraphWarm`, `ActivityFeedWarm`
+- [x] 사이드바 우측 320px 폭, mock 6 노드 handoff 표시
+- [x] **"demo data" 라벨** 사이드바 헤더에 추가 (UI_GUIDE 참조)
 
-### 3.3 디테일 드로어
-- [ ] `components/dashboard-detail.tsx` — DetailDrawer + 4탭 (Stream/Files/Chat/Settings)
-- [ ] `streamFor`, `logsFor`, `filesFor`, `initialChat` mock 함수 이식
-- [ ] **Chat 탭 헤더에 "preview only" 라벨**
+### 3.3 디테일 드로어 ✅ (commit `b9fcef2`)
+- [x] `components/dashboard-detail.tsx` — DetailDrawer + 4탭 (Stream/Files/Chat/Settings)
+- [x] `streamFor`, `logsFor`, `filesFor`, `initialChat` mock 함수 이식
+- [x] **Chat 탭 헤더에 "preview only" 라벨**
 
-### 3.4 모달 & 타임라인
-- [ ] `components/dashboard-modals.tsx` — `NewAgentModal`, `TimelineView`, `TimelineRow`
-- [ ] mock 환경에서 Spawn 클릭 → 더미 Agent 생성하여 그리드 추가 (실제 API 호출은 Phase 5)
+### 3.4 모달 & 타임라인 ✅ (commit `0417a09`)
+- [x] `components/dashboard-modals.tsx` — `NewAgentModal`, `TimelineView`, `TimelineRow`
+- [x] mock 환경에서 Spawn 클릭 → 더미 Agent 생성하여 그리드 추가 (실제 API 호출은 Phase 5)
 
 ### 3.5 시간 범위 필터 ⭐ 신규
 - [ ] `FilterRow` 옆에 세그먼트 컨트롤: `Last 7 days / Last 30 days / All time`
