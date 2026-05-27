@@ -1,0 +1,30 @@
+# dependencies
+node_modules/
+
+# next.js
+.next/
+out/
+next-env.d.ts
+
+# build outputs
+*.tsbuildinfo
+
+# test
+coverage/
+
+# env
+.env*.local
+
+# os
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+
+# claude design handoff — keep the unpacked folder, ignore the archive only
+design-package.tar.gz
+
+# claude-related local state
+.claude/

@@ -1,0 +1,53 @@
+/* Claude-warm design tokens — shared across all 3 variations */
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap');
+
+:root {
+  /* Warm neutrals (oklch family, shared chroma) */
+  --bg:        #f5f1e8;   /* page background */
+  --bg-2:      #efe9dc;   /* deeper warm */
+  --surface:   #fbf8f1;   /* card surface */
+  --surface-2: #f1ece0;
+  --line:      #e2dcca;
+  --line-2:    #d8d0bb;
+
+  --ink:       #29261b;   /* primary text */
+  --ink-2:     #4a4538;
+  --ink-3:     #7b7561;
+  --ink-4:     #a8a18a;
+  --ink-5:     #cdc6ad;
+
+  /* Claude clay accent */
+  --clay:      #c96442;
+  --clay-2:    #d97757;
+  --clay-soft: #f5dccd;
+  --clay-bg:   #faece4;
+
+  /* Status — equal-saturation warm palette */
+  --running:   #6b8e4e;   /* moss */
+  --running-bg:#e6ecd6;
+  --waiting:   #c8943a;   /* amber */
+  --waiting-bg:#f5e7c4;
+  --error:     #b54a3a;   /* terracotta */
+  --error-bg:  #f3d6cd;
+  --idle:      #8a836f;   /* muted */
+  --idle-bg:   #e8e3d4;
+  --review:    #6b6699;   /* soft plum for human-review */
+  --review-bg: #e1ddee;
+
+  /* Type */
+  --sans: 'Geist', ui-sans-serif, -apple-system, system-ui, sans-serif;
+  --mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --serif: 'Instrument Serif', 'Times New Roman', serif;
+
+  /* Radii */
+  --r-sm: 6px;
+  --r:    10px;
+  --r-lg: 14px;
+  --r-xl: 20px;
+}
+
+* { box-sizing: border-box; }
+.dash, .dash * { font-family: var(--sans); }
+.mono { font-family: var(--mono); font-feature-settings: 'ss01', 'cv11'; }
+.serif { font-family: var(--serif); }
+.tnum { font-variant-numeric: tabular-nums; }
