@@ -22,6 +22,9 @@ import { NewAgentModal, TimelineView, type NewAgentDraft } from './dashboard-mod
 export type Layout = 'grid' | 'list' | 'timeline';
 type Filter = 'all' | Status;
 
+// 시간 범위 필터 — Phase 3.5 에선 UI 만. Phase 4 에서 /api/agents?since= 로 서버 전달.
+export type SinceRange = '7d' | '30d' | 'all';
+
 interface Totals {
   total: number;
   running: number;
@@ -42,6 +45,7 @@ export function App({ initialAgents }: AppProps) {
   const [agents, setAgents] = useState<Agent[]>(initialAgents);
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
+  const [since, setSince] = useState<SinceRange>('7d');
   const [layout, setLayout] = useState<Layout>('grid');
   const [density] = useState<Density>('comfortable');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -165,6 +169,7 @@ export function App({ initialAgents }: AppProps) {
         filter={filter} setFilter={setFilter}
         totals={totals}
         query={query} setQuery={setQuery}
+        since={since} setSince={setSince}
         layout={layout} setLayout={setLayout}
         count={filtered.length}
       />
@@ -292,12 +297,16 @@ interface FilterRowProps {
   totals: Totals;
   query: string;
   setQuery: (q: string) => void;
+  since: SinceRange;
+  setSince: (s: SinceRange) => void;
   layout: Layout;
   setLayout: (l: Layout) => void;
   count: number;
 }
 
-function FilterRow({ filter, setFilter, totals, query, setQuery, layout, setLayout, count }: FilterRowProps) {
+function FilterRow({
+  filter, setFilter, totals, query, setQuery, since, setSince, layout, setLayout, count,
+}: FilterRowProps) {
   return (
     <div
       style={{
@@ -318,6 +327,8 @@ function FilterRow({ filter, setFilter, totals, query, setQuery, layout, setLayo
         </FilterChip>
       ))}
       <div style={{ flex: 1 }} />
+
+      <TimeRangeSwitch since={since} setSince={setSince} />
 
       <div
         style={{
@@ -446,6 +457,44 @@ function LayoutSwitch({ layout, setLayout }: { layout: Layout; setLayout: (l: La
           {o.icon}
         </button>
       ))}
+    </div>
+  );
+}
+
+function TimeRangeSwitch({ since, setSince }: { since: SinceRange; setSince: (s: SinceRange) => void }) {
+  const options: Array<{ k: SinceRange; label: string }> = [
+    { k: '7d',  label: '7d'  },
+    { k: '30d', label: '30d' },
+    { k: 'all', label: 'All' },
+  ];
+  return (
+    <div
+      role="group"
+      aria-label="Time range"
+      style={{
+        display: 'flex', padding: 2, borderRadius: 8,
+        background: 'var(--surface-2)', border: '1px solid var(--line)',
+      }}
+    >
+      {options.map((o) => {
+        const active = since === o.k;
+        return (
+          <button
+            key={o.k}
+            onClick={() => setSince(o.k)}
+            aria-pressed={active}
+            style={{
+              padding: '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer',
+              background: active ? 'var(--surface)' : 'transparent',
+              color:      active ? 'var(--ink)'     : 'var(--ink-3)',
+              boxShadow:  active ? '0 1px 2px rgba(40,30,20,0.08)' : 'none',
+              fontFamily: 'var(--sans)', fontSize: 11.5, fontWeight: 500,
+            }}
+          >
+            {o.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
