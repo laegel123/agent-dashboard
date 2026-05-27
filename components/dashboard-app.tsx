@@ -11,9 +11,11 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { STATUS_META } from '@/lib/status-meta';
-import type { Agent, Status } from '@/lib/types';
+import { MOCK_ACTIVITY } from '@/lib/mock-data';
+import type { Agent, ActivityEvent, Status } from '@/lib/types';
 import { Icon } from './dashboard-utils';
 import { GridCard, ListRow, LIST_GRID_COLS, type CardAction, type Density } from './dashboard-card';
+import { Sidebar } from './dashboard-sidebar';
 
 export type Layout = 'grid' | 'list' | 'timeline';
 type Filter = 'all' | Status;
@@ -41,6 +43,7 @@ export function App({ initialAgents }: AppProps) {
   const [layout, setLayout] = useState<Layout>('grid');
   const [density] = useState<Density>('comfortable');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [activity] = useState<ActivityEvent[]>(MOCK_ACTIVITY);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -121,6 +124,7 @@ export function App({ initialAgents }: AppProps) {
             </div>
           )}
         </div>
+        <Sidebar agents={agents} activity={activity} onSelectAgent={setSelectedId} />
       </div>
     </div>
   );
