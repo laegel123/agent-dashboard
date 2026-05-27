@@ -12,10 +12,11 @@ import { useCallback, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { STATUS_META } from '@/lib/status-meta';
 import { MOCK_ACTIVITY } from '@/lib/mock-data';
-import type { Agent, ActivityEvent, Status } from '@/lib/types';
+import type { Agent, ActivityEvent, ChatMsg, Status } from '@/lib/types';
 import { Icon } from './dashboard-utils';
 import { GridCard, ListRow, LIST_GRID_COLS, type CardAction, type Density } from './dashboard-card';
 import { Sidebar } from './dashboard-sidebar';
+import { DetailDrawer, initialChat } from './dashboard-detail';
 
 export type Layout = 'grid' | 'list' | 'timeline';
 type Filter = 'all' | Status;
@@ -44,6 +45,34 @@ export function App({ initialAgents }: AppProps) {
   const [density] = useState<Density>('comfortable');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activity] = useState<ActivityEvent[]>(MOCK_ACTIVITY);
+  const [chats, setChats] = useState<Record<string, ChatMsg[]>>({});
+
+  const selectedAgent = useMemo(
+    () => (selectedId ? agents.find((a) => a.id === selectedId) ?? null : null),
+    [agents, selectedId]
+  );
+
+  const onChatSend = useCallback(
+    (id: string, text: string) => {
+      const agent = agents.find((a) => a.id === id);
+      if (!agent) return;
+      setChats((prev) => {
+        const cur = prev[id] ?? initialChat(agent);
+        return { ...prev, [id]: [...cur, { role: 'user', text }] };
+      });
+      // Canned mock reply — preview-only chat. Replace with real IPC if/when Claude SDK exposes it.
+      window.setTimeout(() => {
+        setChats((prev) => {
+          const cur = prev[id] ?? [];
+          return {
+            ...prev,
+            [id]: [...cur, { role: 'agent', text: cannedReply(agent, text) }],
+          };
+        });
+      }, 900);
+    },
+    [agents]
+  );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -125,9 +154,41 @@ export function App({ initialAgents }: AppProps) {
           )}
         </div>
         <Sidebar agents={agents} activity={activity} onSelectAgent={setSelectedId} />
+
+        {selectedAgent && (
+          <DetailDrawer
+            agent={selectedAgent}
+            onClose={() => setSelectedId(null)}
+            onAction={onAction}
+            chats={chats}
+            onChatSend={onChatSend}
+          />
+        )}
       </div>
     </div>
   );
+}
+
+// Mock canned reply — chat is preview-only in Phase 3.
+function cannedReply(a: Agent, userText: string): string {
+  const tx = userText.toLowerCase();
+  if (a.status === 'waiting') {
+    return "Got it — proceeding with that. I'll update you once I have something to show.";
+  }
+  if (a.status === 'error') {
+    if (tx.includes('retry') || tx.includes('again')) return "Retrying now. I'll pause and ping you if it fails again.";
+    return 'Understood. Should I retry with a longer backoff, or hand the task to another agent?';
+  }
+  if (a.status === 'review') {
+    if (tx.includes('approve') || tx.includes('ship')) return 'Great — merging and closing the PR. Anything else for me?';
+    if (tx.includes('reject') || tx.includes('redo')) return "No problem, I'll revise. What specifically should change?";
+    return 'Happy to revise. Which part should I focus on?';
+  }
+  if (tx.includes('stop')  || tx.includes('pause'))  return "Pausing. I'll wait for your next instruction.";
+  if (tx.includes('?')) {
+    return `Good question. Based on what I'm seeing in ${a.repo}: the cleanest path is the one I'm already on — let me know if you'd like me to consider alternatives.`;
+  }
+  return `Noted. I'll fold that into my current step (${a.step + 1}/${a.steps}) and report back.`;
 }
 
 // ─── TopBar ──────────────────────────────────────────────────────────────────
