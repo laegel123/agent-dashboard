@@ -18,6 +18,7 @@ import { GridCard, ListRow, LIST_GRID_COLS, type CardAction, type Density } from
 import { Sidebar } from './dashboard-sidebar';
 import { DetailDrawer, initialChat } from './dashboard-detail';
 import { NewAgentModal, TimelineView, type NewAgentDraft } from './dashboard-modals';
+import { ToastHost, useToast } from './toast';
 
 export type Layout = 'grid' | 'list' | 'timeline';
 type Filter = 'all' | Status;
@@ -52,6 +53,7 @@ export function App({ initialAgents }: AppProps) {
   const [activity] = useState<ActivityEvent[]>(MOCK_ACTIVITY);
   const [chats, setChats] = useState<Record<string, ChatMsg[]>>({});
   const [newAgentOpen, setNewAgentOpen] = useState(false);
+  const toast = useToast();
 
   const selectedAgent = useMemo(
     () => (selectedId ? agents.find((a) => a.id === selectedId) ?? null : null),
@@ -136,24 +138,30 @@ export function App({ initialAgents }: AppProps) {
   }), [agents]);
 
   // Mock-only action handler — mirrors design source behavior so 3.1 stays
-  // functionally faithful. Real actions land in Phase 5; per ADR-013 §T the
-  // status-mutation side will be removed at that point.
-  const onAction = useCallback((id: string, action: CardAction) => {
-    setAgents((list) =>
-      list.map((a) => {
-        if (a.id !== id) return a;
-        switch (action) {
-          case 'pause':   return { ...a, status: 'waiting', last: 'paused by you — awaiting next move' };
-          case 'retry':   return { ...a, status: 'running', last: 'retrying previous step…' };
-          case 'approve': return { ...a, status: 'idle',    step: a.steps, last: 'approved by you · merged' };
-          case 'reject':  return { ...a, status: 'running', step: Math.max(0, a.step - 1), last: 'rejected — revising approach' };
-          case 'start':   return { ...a, status: 'running', started: 'just now', last: 'starting now…' };
-          case 'stop':    return { ...a, status: 'idle', last: 'stopped by you' };
-          default: return a;
-        }
-      })
-    );
-  }, []);
+  // functionally faithful. Phase 3.6 adds the demo toast on top.
+  // Phase 5.4 will drop the setAgents() call entirely (polling becomes source of truth).
+  const onAction = useCallback(
+    (id: string, action: CardAction) => {
+      toast.demo(
+        'Actual control of running Claude Code processes is not available yet — this is a display-only action.'
+      );
+      setAgents((list) =>
+        list.map((a) => {
+          if (a.id !== id) return a;
+          switch (action) {
+            case 'pause':   return { ...a, status: 'waiting', last: 'paused by you — awaiting next move' };
+            case 'retry':   return { ...a, status: 'running', last: 'retrying previous step…' };
+            case 'approve': return { ...a, status: 'idle',    step: a.steps, last: 'approved by you · merged' };
+            case 'reject':  return { ...a, status: 'running', step: Math.max(0, a.step - 1), last: 'rejected — revising approach' };
+            case 'start':   return { ...a, status: 'running', started: 'just now', last: 'starting now…' };
+            case 'stop':    return { ...a, status: 'idle', last: 'stopped by you' };
+            default: return a;
+          }
+        })
+      );
+    },
+    [toast]
+  );
 
   return (
     <div
@@ -208,6 +216,8 @@ export function App({ initialAgents }: AppProps) {
       {newAgentOpen && (
         <NewAgentModal onClose={() => setNewAgentOpen(false)} onCreate={onCreateAgent} />
       )}
+
+      <ToastHost />
     </div>
   );
 }
