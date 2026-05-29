@@ -4,7 +4,7 @@
 
 ---
 
-## Phase 0 — 문서화 (✅ 진행 중)
+## Phase 0 — 문서화 ✅
 
 - [x] 디자인 패키지 분석
 - [x] CLAUDE.md + docs/ 1차 작성
@@ -73,19 +73,19 @@
 - [x] `components/dashboard-modals.tsx` — `NewAgentModal`, `TimelineView`, `TimelineRow`
 - [x] mock 환경에서 Spawn 클릭 → 더미 Agent 생성하여 그리드 추가 (실제 API 호출은 Phase 5)
 
-### 3.5 시간 범위 필터 ⭐ 신규
-- [ ] `FilterRow` 옆에 세그먼트 컨트롤: `Last 7 days / Last 30 days / All time`
-- [ ] mock 데이터에서는 의미 없지만 UI 동작 확인
+### 3.5 시간 범위 필터 ⭐ 신규 ✅ (commit `8d47581`)
+- [x] `FilterRow` 옆에 세그먼트 컨트롤: `Last 7 days / Last 30 days / All time`
+- [x] mock 데이터에서는 의미 없지만 UI 동작 확인
 
-### 3.6 Demo 토스트 ⭐ 신규
-- [ ] `components/toast.tsx` — `useToast()` 훅 + `<ToastHost />`
-- [ ] 액션 버튼 클릭 시 토스트 표시
-- [ ] App 에 `<ToastHost />` 마운트
+### 3.6 Demo 토스트 ⭐ 신규 ✅ (commit `0041cc4`)
+- [x] `components/toast.tsx` — `useToast()` 훅 + `<ToastHost />`
+- [x] 액션 버튼 클릭 시 토스트 표시
+- [x] App 에 `<ToastHost />` 마운트
 
-### 3.7 Empty / Loading / Error 상태 ⭐ 신규
-- [ ] `EmptyState` 6가지 케이스 분기 (UI_GUIDE 참조)
-- [ ] `LoadingState` 스켈레톤 6개
-- [ ] `ErrorState` Retry 버튼 포함
+### 3.7 Empty / Loading / Error 상태 ⭐ 신규 ✅ (commit `2c490b1`)
+- [x] `EmptyState` 6가지 케이스 분기 (UI_GUIDE 참조)
+- [x] `LoadingState` 스켈레톤 6개
+- [x] `ErrorState` Retry 버튼 포함
 
 ### 3.8 Tweaks (선택)
 - [ ] `components/tweaks-panel.tsx` — `useTweaks`, `TweaksPanel`, 컨트롤들
@@ -97,44 +97,28 @@
 
 ## Phase 4 — 데이터 레이어
 
-### 4.0 mock-data 제거 (ADR-014)
-- [ ] `lib/mock-data.ts` **삭제**
-- [ ] `app/page.tsx` 에서 mock 데이터 import 제거
-- [ ] `<App initialAgents={[]} />` 로 변경 (또는 props 시그니처를 옵셔널로) — Phase 4.3 에서 실 API 로 채움
+### 4.0 mock-data 제거 (ADR-014) ✅
+- [x] `lib/mock-data.ts` 에서 **`MOCK_AGENTS` 제거**. ⚠️ `MOCK_ACTIVITY` 는 유지 — 사이드바 Activity 피드는 "demo data" 배지가 붙은 데모로 Phase 7 까지 존속 (사용자 결정).
+- [x] `app/page.tsx` 에서 `MOCK_AGENTS` import 제거
+- [x] `App` 시그니처에서 `initialAgents` 제거 → 자체 fetch (4.3)
 
-### 4.1 메타 + 파서 + 추론기 + 캐시
+### 4.1 메타 + 파서 + 추론기 + 캐시 ✅
 
-- [ ] `lib/sessions-meta.ts` ⭐ 신규 (ADR-013)
-  - `interface SessionMeta { pid, sessionId, cwd, startedAt, entrypoint, version, kind }`
-  - `loadActiveSessions(): Promise<Map<string, SessionMeta>>` — `~/.claude/sessions/*.json` 전체 로드, `JSON.parse` 실패는 skip, sessionId 키 Map 반환
-  - `isProcessAlive(pid: number): boolean` — `try { process.kill(pid, 0); return true } catch (e) { return e.code === 'EPERM' }` 패턴. Windows/macOS/Linux 모두 작동.
+> ⚠️ **실 포맷 반영** (라이브 로그 검증, 2026-05): DATA_MODEL 가정과 다른 점 —
+> ① `tool_use`/`tool_result`/`thinking` 은 top-level 레코드가 아니라 `assistant.content`/`user.content` 블록에 임베드 → `edited`/`step` 은 content 블록에서 추출.
+> ② 메타 레코드(permission-mode/ai-title/agent-name/mode/last-prompt/…)는 `cwd`/`entrypoint`/`timestamp` 가 null → `records[0]` 대신 필드 보유 레코드를 스캔.
+> ③ 파일명 = sessionId (가장 신뢰).
+> ④ `system` 레코드에 실제 error 없음 → error 판정은 `level==='error'` 로 엄격화.
 
-- [ ] `lib/status-deriver.ts` ⭐ 시그니처 변경 (ADR-013 v2)
-  - `deriveStatus(records, meta?, now?): Status`
-  - DATA_MODEL §3 의 알고리즘 그대로
-  - meta === undefined 또는 PID dead → `'idle'`
-  - alive 면 마지막 레코드 타입 분기
+- [x] `lib/sessions-meta.ts` — `SessionMeta`, `loadActiveSessions()`(sessionId 키 Map), `isProcessAlive()`(EPERM=alive)
+- [x] `lib/status-deriver.ts` — `deriveStatus(records, meta?, now?)`. meta 없음/PID dead → idle. alive 면 **마지막 core 레코드**(timestamp 보유 assistant/user/system)로 substate. trailing 메타 레코드 무시.
+- [x] `lib/claude-logs.ts` — `getClaudeHome()`, `projectsRootExists()`, `scanProjects()`(subagents/ skip), `readSession()`(readline 스트리밍, 라인별 parse 실패 skip), `sessionEntrypoint()`, `sessionToAgent()`
+- [x] `lib/log-cache.ts` — mtime+size 캐시. 변경 없으면 캐시된 records 반환(재파싱 X, dev hit 로그). **status 는 캐시 안 함** — sessionToAgent 에서 매 요청 재추론. (byte-offset incremental 은 후속 최적화, 현재는 mtime 기준 whole-file 재읽기)
 
-- [ ] `lib/claude-logs.ts`
-  - `getClaudeHome(): string` — `os.homedir() + '/.claude'`
-  - `scanProjects(): Promise<string[]>` — 모든 `.jsonl` 절대 경로 (subagents 폴더 포함하되 메인과 구분)
-  - `readSession(filepath): Promise<JsonlRecord[]>` — **`readline` 으로 line-by-line streaming**. 각 line `JSON.parse` 실패 시 console.warn + skip (동시 append 의 마지막 불완전 라인 케이스)
-  - `sessionToAgent(filepath, records, activeSessions): Agent` — ★ 세 번째 인자에 `Map<sessionId, SessionMeta>` 전달
+- [~] **단위 테스트** — 핵심 스모크 30케이스 작성·통과 (`test/{pricing,status-deriver,claude-logs,format-time}.test.ts`). vitest 설치 + `npm test` 스크립트 추가. ⏳ **후속**: TESTING.md §5 풀세트 80케이스 + fixtures + 커버리지 임계값.
 
-- [ ] `lib/log-cache.ts` — mtime 캐시 + incremental 파싱 (ADR-011)
-  - 캐시 키 = 파일 절대경로
-  - 캐시 값 = `{ mtimeMs, size, lastByteOffset, partialAgent (status 제외), records: last 50 }`
-  - **주의**: `agent.status` 는 캐시하지 말 것 — status 는 매 요청마다 `deriveStatus` 재호출 (sessions/ 가 매번 바뀔 수 있음). 캐시는 records / tokens / cost / files 등 정적 데이터만.
-  - 부분 실패: 한 파일 파싱이 던지면 console.warn + 해당 파일만 skip. 다른 파일 정상 진행.
-
-- [ ] **단위 테스트** — `docs/TESTING.md` §5 참조
-  - 의존성 설치: `npm install --save-dev vitest @vitest/coverage-v8 jsdom @testing-library/react @testing-library/jest-dom @testing-library/user-event`
-  - `test/fixtures/claude-home/` 생성 (가짜 ~/.claude 구조)
-  - `lib/*` 9개 모듈에 대해 **80개 케이스** 작성 (pricing 12 + status-deriver 11 + sessions-meta 9 + claude-logs 16 + log-cache 6 + spawn 10 + open-folder 4 + format-time 7 + format-path 5)
-  - `npm run test:coverage` 임계값 통과 (lib/* 라인 80% / 함수 90%)
-
-### 4.2 API Routes
-- [ ] `app/api/agents/route.ts`
+### 4.2 API Routes ✅
+- [x] `app/api/agents/route.ts` — GET, `runtime='nodejs'`, `dynamic='force-dynamic'`, `Cache-Control: no-store`. since(7d/30d/all) cutoff + cli 필터 + lastTimestamp 정렬 + totals + `projectsFound` 플래그.
   ```typescript
   export const runtime = 'nodejs';
   export const dynamic = 'force-dynamic';
@@ -161,28 +145,28 @@
   }
   ```
 
-### 4.3 클라이언트 연결
-- [ ] `app/page.tsx` 가 mount 시 `/api/agents?since=7d` 호출
-- [ ] 응답을 App 의 `initialAgents` 로 전달
-- [ ] 30초 setInterval 폴링
-- [ ] 시간 범위 토글 변경 시 다시 fetch
-- [ ] EmptyState / LoadingState / ErrorState 분기
+### 4.3 클라이언트 연결 ✅
+- [x] `App` 이 mount 시 `/api/agents?since=` 호출 (page.tsx 는 `<App />` 만 렌더)
+- [x] 응답을 App 의 `agents` 상태로 (initialAgents prop 폐기)
+- [x] 30초 setInterval 폴링 (silent — 스켈레톤 깜빡임 없음, poll 실패는 stale 데이터 유지)
+- [x] 시간 범위 토글 변경 시 다시 fetch (`useEffect([since])`)
+- [x] LoadingState / ErrorState / EmptyState 분기 (`pickEmptyReason` 에 `projectsFound` 반영 → no-projects-folder vs no-cli-sessions)
+- [x] ⭐ 사이드바 Hand-offs 그래프를 실 agent → 슬롯 매핑 (엣지는 데모, "demo data" 배지 유지)
 
 ### 4.4 API Route 통합 테스트 — `docs/TESTING.md` §6
-- [ ] `/api/agents` — 8개 케이스 (entrypoint cli 필터, since 옵션 3종, 정렬, totals, 부분 실패)
+- [ ] ⏳ **후속**: `/api/agents` 8개 케이스 (entrypoint cli 필터, since 3종, 정렬, totals, 부분 실패) — 핵심 테스트 우선 결정으로 후순위.
 
-**검증** — 본인 머신 CLI 세션이 1개뿐 (`overseas-app`) 임을 전제로 수동 검증:
-- [ ] **1-card 케이스**: `overseas-app` CLI 세션이 카드 1장으로 노출
-- [ ] **토큰 합 일치**: 카드 `tokens` 값 = JSONL 의 `input_tokens + output_tokens` 합 (cache 제외, 오차 0)
-- [ ] **비용 합 일치**: 카드 `cost` 값 = `calculateCost` 결과 (cache 포함). 직접 수동 계산해 비교
-- [ ] **모델 표기**: 카드 `model` 이 `opus-4.7` / `sonnet-4.6` / `haiku-4.5` 형태로 짧게
-- [ ] **edited 카운트**: tool_use Edit/Write/MultiEdit/NotebookEdit 의 고유 file_path 수와 일치 (수동 grep 으로 검증)
-- [ ] **mtime 캐시**: 두 번째 요청에서 재파싱 안 함 (dev 콘솔 로그)
-- [ ] **시간 범위 토글**: `Last 7 days` / `Last 30 days` / `All time` 모두 동작
-- [ ] **Status 추론 v2**: `~/.claude/sessions/<pid>.json` 이 존재 → `running`/`waiting`, 없음 → `idle`
-- [ ] **alive 검증**: 새 터미널 `claude` 실행 → 30초 안에 새 카드 `running`. 그 터미널 `exit` → `idle`
-- [ ] **EmptyState 케이스 수동**: `~/.claude/projects/` 임시 rename 후 페이지 새로고침 → "No Claude Code sessions yet" 안내
-- [ ] **Few-cards 케이스 수동**: 새 cwd 에서 `claude` 두 번 실행해 세션 2-3 개 추가 → 그리드가 자연스럽게 채워지는지
+**검증** — (전제 갱신: 이 머신은 CLI 세션 다수 — 7d 기본 2장, all 41장):
+- [x] **토큰 합 일치**: 29c9699d 카드 `tokens` = JSONL `input+output` 합 = **1,637,860** 정확 일치
+- [x] **비용 합 일치**: 동 세션 `cost` ≈ $1057 = output·cache_write·**cache_read(541M×$1.5)** 합산과 검산 일치. (장기 opus 세션은 cache_read 누적으로 실제 고비용 — DATA_MODEL "~$10" 추정이 낙관적이었던 것, 버그 아님)
+- [x] **모델 표기**: `opus-4.7` / `sonnet-4.6`. `<synthetic>` 메시지는 표기에서 제외
+- [x] **edited 카운트**: content 블록의 Edit/Write/MultiEdit/NotebookEdit 고유 file_path (단위 테스트로 검증)
+- [x] **mtime 캐시**: 2번째 요청부터 재파싱 안 함 (dev 로그 `[log-cache] hit` 82건)
+- [x] **시간 범위 토글**: 7d=2장 / all=41장 동작
+- [x] **Status 추론 v2**: 라이브 세션(5bd0b4cc, pid 66365) → `running`, 종료 세션 → `idle`
+- [ ] ⏳ **브라우저 시각 검증**: 이 환경에서 미수행 (API·페이지 200·런타임 에러 0 까지만 확인). 실제 브라우저 좌우 비교 필요.
+- [ ] **alive 토글 검증**: 새 터미널 `claude` → 새 카드 `running`, `exit` → `idle` (수동)
+- [ ] **EmptyState 케이스**: `~/.claude/projects/` 임시 rename 후 새로고침 (수동)
 
 ---
 

@@ -8,7 +8,7 @@
 
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { STATUS_META } from '@/lib/status-meta';
 import { MOCK_ACTIVITY } from '@/lib/mock-data';
@@ -19,7 +19,7 @@ import { Sidebar } from './dashboard-sidebar';
 import { DetailDrawer, initialChat } from './dashboard-detail';
 import { NewAgentModal, TimelineView, type NewAgentDraft } from './dashboard-modals';
 import { ToastHost, useToast } from './toast';
-import { EmptyState, type EmptyReason } from './dashboard-states';
+import { EmptyState, LoadingState, ErrorState, type EmptyReason } from './dashboard-states';
 
 export type Layout = 'grid' | 'list' | 'timeline';
 type Filter = 'all' | Status;
@@ -39,12 +39,13 @@ interface Totals {
   edited: number;
 }
 
-export interface AppProps {
-  initialAgents: Agent[];
-}
+type LoadState = 'loading' | 'ready' | 'error';
 
-export function App({ initialAgents }: AppProps) {
-  const [agents, setAgents] = useState<Agent[]>(initialAgents);
+export function App() {
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [loadState, setLoadState] = useState<LoadState>('loading');
+  const [errorDetail, setErrorDetail] = useState<string | undefined>();
+  const [projectsFound, setProjectsFound] = useState(true);
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
   const [since, setSince] = useState<SinceRange>('7d');
@@ -55,6 +56,34 @@ export function App({ initialAgents }: AppProps) {
   const [chats, setChats] = useState<Record<string, ChatMsg[]>>({});
   const [newAgentOpen, setNewAgentOpen] = useState(false);
   const toast = useToast();
+
+  // ── Real data: fetch on mount, refetch on time-range change, poll every 30s ──
+  const load = useCallback(async (sinceArg: SinceRange, opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoadState('loading');
+    try {
+      const res = await fetch(`/api/agents?since=${sinceArg}`, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setAgents(data.agents ?? []);
+      setProjectsFound(data.projectsFound ?? true);
+      setErrorDetail(undefined);
+      setLoadState('ready');
+    } catch (e) {
+      if (opts?.silent) {
+        console.warn('[agents] poll failed:', e);
+      } else {
+        setErrorDetail((e as Error)?.message);
+        setLoadState('error');
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    load(since);
+    const id = window.setInterval(() => load(since, { silent: true }), 30_000);
+    return () => window.clearInterval(id);
+  }, [since, load]);
 
   const selectedAgent = useMemo(
     () => (selectedId ? agents.find((a) => a.id === selectedId) ?? null : null),
@@ -185,9 +214,13 @@ export function App({ initialAgents }: AppProps) {
 
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
         <div style={{ flex: 1, overflow: 'auto', minWidth: 0 }}>
-          {filtered.length === 0 ? (
+          {loadState === 'loading' && agents.length === 0 ? (
+            <LoadingState />
+          ) : loadState === 'error' ? (
+            <ErrorState detail={errorDetail} onRetry={() => load(since)} />
+          ) : filtered.length === 0 ? (
             <EmptyState
-              reason={pickEmptyReason({ agents, query, filter, since })}
+              reason={pickEmptyReason({ agents, query, filter, since, projectsFound })}
               status={filter !== 'all' ? (filter as Status) : undefined}
               query={query}
               onClearSearch={() => setQuery('')}
@@ -238,15 +271,16 @@ export function App({ initialAgents }: AppProps) {
 }
 
 // Empty 분기 결정.
-//  - agents 자체가 0 → 'no-cli-sessions' (Phase 4 에서 'no-projects-folder' 와 분리)
+//  - agents 0 + projects 폴더 없음 → 'no-projects-folder'
+//  - agents 0 + 폴더는 있음        → 'no-cli-sessions'
 //  - 검색 쿼리 있음 → 'search-empty'
 //  - status 필터 있음 → 'status-empty'
-//  - since !== 'all' 인데 결과 0 → 'time-range-empty'  (Phase 3 mock 에선 적용 안 되지만 로직은 살려둠)
+//  - since !== 'all' 인데 결과 0 → 'time-range-empty'
 //  - 그 외 → 'no-match'
 function pickEmptyReason({
-  agents, query, filter, since,
-}: { agents: Agent[]; query: string; filter: Filter; since: SinceRange }): EmptyReason {
-  if (agents.length === 0) return 'no-cli-sessions';
+  agents, query, filter, since, projectsFound,
+}: { agents: Agent[]; query: string; filter: Filter; since: SinceRange; projectsFound: boolean }): EmptyReason {
+  if (agents.length === 0) return projectsFound ? 'no-cli-sessions' : 'no-projects-folder';
   if (query.trim()) return 'search-empty';
   if (filter !== 'all') return 'status-empty';
   if (since !== 'all') return 'time-range-empty';

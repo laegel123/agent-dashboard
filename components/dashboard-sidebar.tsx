@@ -51,27 +51,25 @@ function DemoBadge() {
 }
 
 // ─── Hand-off graph ──────────────────────────────────────────────────────────
-const SEED_NAMES = [
-  'refactor-api', 'test-coverage', 'docs-update',
-  'a11y-pass',    'perf-audit',    'feature-search',
-] as const;
+// Demo hand-off layout: fixed slots + fabricated edges. We can't derive real
+// hand-offs from JSONL yet (Phase 7), so live agents are mapped into the slots
+// to keep the graph populated; the "demo data" badge marks the edges illustrative.
+const SLOTS: Array<{ x: number; y: number }> = [
+  { x: 60,  y: 50  },
+  { x: 155, y: 80  },
+  { x: 245, y: 55  },
+  { x: 90,  y: 145 },
+  { x: 185, y: 155 },
+  { x: 260, y: 135 },
+];
 
-const POSITIONS: Record<string, { x: number; y: number }> = {
-  'refactor-api':   { x: 60,  y: 50  },
-  'test-coverage':  { x: 155, y: 80  },
-  'docs-update':    { x: 245, y: 55  },
-  'a11y-pass':      { x: 90,  y: 145 },
-  'perf-audit':     { x: 185, y: 155 },
-  'feature-search': { x: 260, y: 135 },
-};
-
-const EDGES: Array<[string, string]> = [
-  ['refactor-api',  'test-coverage'],
-  ['test-coverage', 'docs-update'],
-  ['refactor-api',  'a11y-pass'],
-  ['a11y-pass',     'perf-audit'],
-  ['perf-audit',    'feature-search'],
-  ['test-coverage', 'feature-search'],
+const SLOT_EDGES: Array<[number, number]> = [
+  [0, 1],
+  [1, 2],
+  [0, 3],
+  [3, 4],
+  [4, 5],
+  [1, 5],
 ];
 
 interface GraphNode extends Agent {
@@ -80,17 +78,9 @@ interface GraphNode extends Agent {
 }
 
 function CollabGraphWarm({ agents, onSelectAgent }: { agents: Agent[]; onSelectAgent: (id: string) => void }) {
-  const lookupByName: Record<string, Agent> = Object.fromEntries(agents.map((a) => [a.name, a]));
-  const seen = new Set<string>();
-  const nodes: GraphNode[] = [];
-  for (const name of SEED_NAMES) {
-    const a = lookupByName[name];
-    const pos = POSITIONS[name];
-    if (!a || !pos || seen.has(name)) continue;
-    seen.add(name);
-    nodes.push({ ...a, x: pos.x, y: pos.y });
-  }
-  const byName: Record<string, GraphNode> = Object.fromEntries(nodes.map((n) => [n.name, n]));
+  const nodes: GraphNode[] = agents
+    .slice(0, SLOTS.length)
+    .map((a, i) => ({ ...a, x: SLOTS[i].x, y: SLOTS[i].y }));
 
   return (
     <div style={{ padding: '16px 18px 12px', borderBottom: '1px solid var(--line)', background: 'var(--surface-2)' }}>
@@ -116,9 +106,9 @@ function CollabGraphWarm({ agents, onSelectAgent }: { agents: Agent[]; onSelectA
             <path d="M0,0 L10,5 L0,10 z" fill="var(--ink-4)" />
           </marker>
         </defs>
-        {EDGES.map(([from, to], i) => {
-          const a = byName[from];
-          const b = byName[to];
+        {SLOT_EDGES.map(([from, to], i) => {
+          const a = nodes[from];
+          const b = nodes[to];
           if (!a || !b) return null;
           // Shorten so the arrow tip lands at the destination dot edge
           const dx = b.x - a.x;
