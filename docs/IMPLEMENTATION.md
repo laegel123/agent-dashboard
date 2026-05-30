@@ -164,7 +164,7 @@
 - [x] **mtime 캐시**: 2번째 요청부터 재파싱 안 함 (dev 로그 `[log-cache] hit` 82건)
 - [x] **시간 범위 토글**: 7d=2장 / all=41장 동작
 - [x] **Status 추론 v2**: 라이브 세션(5bd0b4cc, pid 66365) → `running`, 종료 세션 → `idle`
-- [ ] ⏳ **브라우저 시각 검증**: 이 환경에서 미수행 (API·페이지 200·런타임 에러 0 까지만 확인). 실제 브라우저 좌우 비교 필요.
+- [x] **브라우저 시각 검증**: playwright-core + 시스템 Chrome 헤드리스로 6개 상태 캡처 — 7d 뷰(실 카드 2장, 합계 일치), All time(41장 + Hand-offs 6노드), detail drawer(실 통계 헤더), search-empty, LoadingState 스켈레톤, EmptyState(no-cli-sessions). 앱 런타임 에러 0.
 - [ ] **alive 토글 검증**: 새 터미널 `claude` → 새 카드 `running`, `exit` → `idle` (수동)
 - [ ] **EmptyState 케이스**: `~/.claude/projects/` 임시 rename 후 새로고침 (수동)
 
