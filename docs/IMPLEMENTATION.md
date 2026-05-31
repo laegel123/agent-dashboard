@@ -185,7 +185,10 @@
 claude --name <name> --model <alias> --session-id <uuid> "<prompt>"
 ```
 
-### 5.1 Spawn API — claude 인자 4종 활용 (v3.4)
+### 5.1 Spawn API — claude 인자 4종 활용 (v3.4) ✅
+
+> 구현은 아래 코드 블록과 거의 동일. 차이: `lib/spawn.ts` 가 헬퍼(`sqPosix`/`dqWin`)를 export 가능한 형태로 정리하고, darwin osascript 호출에 `detached: true` + `unref()` 추가, linux 후보 순서 동일.
+
 
 ```typescript
 // lib/spawn.ts
@@ -236,56 +239,37 @@ export async function spawnClaudeSession(opts: SpawnOpts): Promise<{ ok: true; m
 }
 ```
 
-- [ ] `app/api/spawn/route.ts` — POST 핸들러
-  - **Origin 헤더 체크** (ADR-015): `http://localhost:3000` 또는 `http://127.0.0.1:3000` 이 아니면 403
-  - body 검증:
-    - `sessionId`: UUID 형식
-    - `cwd`: `fs.statSync(cwd).isDirectory()` 통과
-    - `name`: 비어있지 않음, 100자 이내
-    - `model`: `sonnet` / `opus` / `haiku` 중 하나
-    - `task`: 옵션, 500자 이내
-  - `lib/spawn::spawnClaudeSession` 호출
+- [x] `app/api/spawn/route.ts` — POST. Origin 화이트리스트 + body 검증 5종(UUID/cwd 절대+isDir/name ≤100/model alias/task ≤500). `lib/spawn::spawnClaudeSession` 호출.
 
-- [ ] NewAgentModal:
-  - `crypto.randomUUID()` 로 sessionId 생성
-  - body 에 sessionId 포함해 fetch
-  - 성공 시 **id=sessionId 로 Optimistic placeholder 카드 등록**
-  - **폴링이 같은 sessionId 의 실 Agent 발견 시 자동 교체** (결정론적)
+- [x] NewAgentModal: `crypto.randomUUID()` 로 sessionId 생성 → `/api/spawn` POST → 성공 시 부모(App)에 SpawnedAgent 전달, 부모가 placeholder 카드 push. 폴링이 같은 sessionId 발견 시 자동 교체.
+  - ⚠️ UX 변경: "Repository" 드롭다운 → "Working directory" 절대경로 입력. "Start immediately" 토글 제거(spawn = 시작, 중복 의미).
 
-### 5.2 Open Folder API
-- [ ] `lib/open-folder.ts` — OS 분기:
-  - Windows: `child_process.exec(`start "" "${cwd}"`)`
-  - macOS: `child_process.exec(`open "${cwd}"`)`
-  - Linux: `child_process.exec(`xdg-open "${cwd}"`)`
-- [ ] `app/api/open-folder/route.ts` — POST 핸들러
-- [ ] **Detail drawer 헤더의 폴더 아이콘** 에 연결 (디자인 원본에 없는 신규 — COMPONENTS.md 참조)
+### 5.2 Open Folder API ✅
+- [x] `lib/open-folder.ts` — OS 분기. ⚠️ `exec` 대신 `spawn` + array args 사용(셸 인젝션 방지). darwin `open` / linux `xdg-open` / win32 `cmd /c start`.
+- [x] `app/api/open-folder/route.ts` — POST. Origin + cwd(절대+isDir) 검증.
+- [x] **Detail drawer 헤더 폴더 아이콘** — × 옆에 추가. 클릭 → POST /api/open-folder, 실패 시 toast.error.
 
-### 5.3 Optimistic placeholder 카드 (ADR-014 + v3.4 Z)
-- [ ] App 상태에 `placeholderCards: Array<{ id: string; name: string; cwd: string; model: string; expiresAt: number }>` 추가
-  - **id = spawn 으로 보낸 sessionId (UUID)**
-- [ ] spawn 응답 200 시 즉시 push (`expiresAt: Date.now() + 60_000`)
-- [ ] 폴링 시 — 각 실 Agent 의 `sessionId` 와 placeholder.id 비교, 매칭되면 placeholder 제거
-- [ ] 매 폴링마다 `Date.now() > expiresAt` 인 placeholder 청소 + toast
+### 5.3 Optimistic placeholder 카드 (ADR-014 + v3.4 Z) ✅
+- [x] App 상태: `placeholders: Array<{ agent: Agent; expiresAt: number }>` — agent 는 status='running', sessionId=spawn 으로 보낸 UUID.
+- [x] spawn 응답 200 시 부모 onCreate 가 placeholder push (`expiresAt: now + 60_000`).
+- [x] `displayAgents = useMemo(...)` 로 agents + 미매칭 placeholders 머지 → 카드/사이드바/totals/EmptyState 모두 머지된 뷰 사용.
+- [x] 폴링 reconciliation: load() 후 sessionId 매칭 placeholder 제거, 만료된 것 청소 + toast.error("didn't show up within 60s").
+- 🔴 **버그 수정**: `load` useCallback 의 deps 에 `toast` 객체를 넣으면 매 렌더 새 객체 → effect 재실행 → setInterval 폭주(ERR_INSUFFICIENT_RESOURCES). `toastRef` 로 안정화.
 
-### 5.4 Demo 액션 — Toast + Activity only (ADR-013 T)
-- [ ] dashboard-app 의 `onAction` 6개 분기 모두:
-  - Demo toast 표시 ("Real control of running Claude Code processes is not available — this is a display-only action")
-  - Activity 피드에 이벤트 push
-  - **카드 status 안 변경** — `setAgents` 호출 X (디자인 원본 패턴 포기)
-- [ ] 디자인 원본의 `setAgents(list => list.map(a => a.id === id ? { ...a, status: ... } : a))` 로직 제거
-- [ ] 폴링이 다음 응답에서 실 status 반환 → UI 자동 갱신
+### 5.4 Demo 액션 — Toast only ✅
+- [x] `onAction` 의 6개 분기 setAgents 로직 완전 삭제, 토스트만 유지(폴링이 source of truth).
+- [ ] Activity 피드 이벤트 push — 현 단계 생략(Activity 는 여전히 데모 MOCK_ACTIVITY).
 
-### 5.5 통합 테스트 추가 — `docs/TESTING.md` §6.2 / §6.3
-- [ ] `/api/spawn` — 9개 케이스 (Origin 부재/mismatch/정상, body 검증 5종, spawn 실패)
-- [ ] `/api/open-folder` — 3개 케이스
+### 5.5 통합 테스트 — `docs/TESTING.md` §6.2 / §6.3 ✅ (핵심 스모크)
+- [x] `/api/spawn` — 10케이스 (Origin 부재/mismatch, body 검증 5종, 정상 path mocked spawnClaudeSession). 실 spawn 은 mock.
+- [x] `/api/open-folder` — 4케이스 (Origin/cwd 검증 + 정상 path mocked openFolder).
+- [x] vitest.config 에 `@` alias 추가(라우트 import 호환).
 
 **검증**:
-- [ ] Spawn 시 새 터미널 창 뜸 + claude 실행
-- [ ] **Optimistic placeholder 카드 즉시 등장**
-- [ ] 30초 안에 실 jsonl 매칭 → placeholder 가 실 카드로 교체
-- [ ] 30초 후에도 안 뜨면 placeholder 사라짐 + 안내 toast
-- [ ] Detail drawer 헤더의 폴더 아이콘 클릭 → 에디터 / 파일 탐색기 뜸
-- [ ] 다른 액션 클릭 시 demo toast 정상 노출
+- [x] **API 보안 표면 curl 검증**: spawn — Origin 누락/잘못 → 403, body 검증(UUID/model/cwd) → 400. open-folder — Origin 누락 → 403, 상대경로 → 400.
+- [x] **UI 시각 검증**: NewAgentModal 새 폼(Working directory + Branch hint 변경, autoStart 제거), Detail drawer 헤더 폴더 버튼 위치(× 옆).
+- [ ] ⏳ **수동**: Spawn 으로 실 터미널 + claude 실행, Optimistic placeholder 즉시 등장 → 30s 안에 실 jsonl 매칭 → 자동 교체. 60s 무응답 시 placeholder 사라짐 + toast. (UI 에서 "+ New agent" 클릭으로 검증)
+- [ ] ⏳ **수동**: Detail drawer 폴더 아이콘 → Finder/탐색기 뜸.
 
 ---
 

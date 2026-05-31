@@ -8,7 +8,7 @@
 
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { STATUS_META } from '@/lib/status-meta';
 import { MOCK_ACTIVITY } from '@/lib/mock-data';
@@ -55,9 +55,19 @@ export function App() {
   const [activity] = useState<ActivityEvent[]>(MOCK_ACTIVITY);
   const [chats, setChats] = useState<Record<string, ChatMsg[]>>({});
   const [newAgentOpen, setNewAgentOpen] = useState(false);
+  // Optimistic cards for sessions we just spawned but the polled API hasn't
+  // surfaced yet. Reconciled by sessionId match; pruned at expiresAt.
+  const [placeholders, setPlaceholders] = useState<Array<{ agent: Agent; expiresAt: number }>>([]);
   const toast = useToast();
+  // `useToast()` returns a fresh object each render — keep a ref so `load`
+  // can stay stable. Without this, the polling effect would re-run every
+  // render and create a setInterval storm.
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
 
   // ── Real data: fetch on mount, refetch on time-range change, poll every 30s ──
+  // Also prunes optimistic placeholders that either matched a real session by
+  // sessionId or aged past expiresAt (toast on expiry).
   const load = useCallback(async (sinceArg: SinceRange, opts?: { silent?: boolean }) => {
     if (!opts?.silent) setLoadState('loading');
     try {
@@ -65,10 +75,28 @@ export function App() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      setAgents(data.agents ?? []);
+      const fetched: Agent[] = data.agents ?? [];
+      setAgents(fetched);
       setProjectsFound(data.projectsFound ?? true);
       setErrorDetail(undefined);
       setLoadState('ready');
+      setPlaceholders((prev) => {
+        if (prev.length === 0) return prev;
+        const now = Date.now();
+        const realIds = new Set(fetched.map((a) => a.sessionId));
+        const kept: typeof prev = [];
+        for (const p of prev) {
+          if (realIds.has(p.agent.sessionId)) continue; // reconciled — real card takes over
+          if (p.expiresAt <= now) {
+            toastRef.current.error(
+              `Spawned "${p.agent.name}" didn't show up within 60s — terminal may have been closed before claude started.`
+            );
+            continue;
+          }
+          kept.push(p);
+        }
+        return kept.length === prev.length ? prev : kept;
+      });
     } catch (e) {
       if (opts?.silent) {
         console.warn('[agents] poll failed:', e);
@@ -85,48 +113,56 @@ export function App() {
     return () => window.clearInterval(id);
   }, [since, load]);
 
+  // Real cards + still-pending optimistic placeholders (filtered against real ids).
+  const displayAgents = useMemo(() => {
+    if (placeholders.length === 0) return agents;
+    const realIds = new Set(agents.map((a) => a.sessionId));
+    const pending = placeholders
+      .filter((p) => !realIds.has(p.agent.sessionId))
+      .map((p) => p.agent);
+    return [...pending, ...agents];
+  }, [agents, placeholders]);
+
   const selectedAgent = useMemo(
-    () => (selectedId ? agents.find((a) => a.id === selectedId) ?? null : null),
-    [agents, selectedId]
+    () => (selectedId ? displayAgents.find((a) => a.id === selectedId) ?? null : null),
+    [displayAgents, selectedId]
   );
 
   const onCreateAgent = useCallback((d: NewAgentDraft) => {
-    const slug = d.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-    const suffix = Math.floor(Math.random() * 90 + 10);
-    const idPrefix = d.model.split('-')[0];
-    const id = `${idPrefix}-${suffix}`;
     const now = Date.now();
-    const agent: Agent = {
+    const id = d.sessionId.slice(0, 8);
+    const parts = d.cwd.replace(/\\/g, '/').split('/').filter(Boolean);
+    const repo = parts.slice(-2).join('/') || '—';
+    const placeholder: Agent = {
       id,
-      name: slug || 'new-agent',
-      status: d.autoStart ? 'running' : 'idle',
+      name: d.name,
+      status: 'running',
       task: d.task,
-      repo: d.repo,
-      branch: d.branch || (d.autoStart ? `feat/${slug || 'new-agent'}` : '—'),
+      repo,
+      branch: d.branch || '—',
       step: 0,
-      steps: 4,
+      steps: 8,
       tokens: 0,
       cost: 0,
       model: d.model,
       edited: 0,
-      started: d.autoStart ? 'just now' : '—',
-      last: d.autoStart ? 'spawned by you' : 'awaiting start',
-      // Stub meta — Phase 5 replaces with optimistic placeholder card backed by a real UUID.
-      sessionId: `mock-${id}-${now.toString(36)}`,
+      started: 'just now',
+      last: 'spawning…',
+      sessionId: d.sessionId,
       filePath: '',
-      cwd: '',
+      cwd: d.cwd,
       firstTimestamp: now,
       lastTimestamp: now,
       entrypoint: 'cli',
     };
-    setAgents((list) => [agent, ...list]);
+    setPlaceholders((list) => [...list, { agent: placeholder, expiresAt: now + 60_000 }]);
     setNewAgentOpen(false);
     setSelectedId(id);
   }, []);
 
   const onChatSend = useCallback(
     (id: string, text: string) => {
-      const agent = agents.find((a) => a.id === id);
+      const agent = displayAgents.find((a) => a.id === id);
       if (!agent) return;
       setChats((prev) => {
         const cur = prev[id] ?? initialChat(agent);
@@ -143,51 +179,36 @@ export function App() {
         });
       }, 900);
     },
-    [agents]
+    [displayAgents]
   );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return agents.filter((a) => {
+    return displayAgents.filter((a) => {
       if (filter !== 'all' && a.status !== filter) return false;
       if (!q) return true;
       return (a.name + ' ' + a.id + ' ' + a.task + ' ' + a.repo + ' ' + a.branch).toLowerCase().includes(q);
     });
-  }, [agents, filter, query]);
+  }, [displayAgents, filter, query]);
 
   const totals: Totals = useMemo(() => ({
-    total:   agents.length,
-    running: agents.filter((x) => x.status === 'running').length,
-    review:  agents.filter((x) => x.status === 'review').length,
-    error:   agents.filter((x) => x.status === 'error').length,
-    waiting: agents.filter((x) => x.status === 'waiting').length,
-    idle:    agents.filter((x) => x.status === 'idle').length,
-    tokens:  agents.reduce((s, x) => s + x.tokens, 0),
-    cost:    agents.reduce((s, x) => s + x.cost, 0),
-    edited:  agents.reduce((s, x) => s + x.edited, 0),
-  }), [agents]);
+    total:   displayAgents.length,
+    running: displayAgents.filter((x) => x.status === 'running').length,
+    review:  displayAgents.filter((x) => x.status === 'review').length,
+    error:   displayAgents.filter((x) => x.status === 'error').length,
+    waiting: displayAgents.filter((x) => x.status === 'waiting').length,
+    idle:    displayAgents.filter((x) => x.status === 'idle').length,
+    tokens:  displayAgents.reduce((s, x) => s + x.tokens, 0),
+    cost:    displayAgents.reduce((s, x) => s + x.cost, 0),
+    edited:  displayAgents.reduce((s, x) => s + x.edited, 0),
+  }), [displayAgents]);
 
-  // Mock-only action handler — mirrors design source behavior so 3.1 stays
-  // functionally faithful. Phase 3.6 adds the demo toast on top.
-  // Phase 5.4 will drop the setAgents() call entirely (polling becomes source of truth).
+  // Display-only — Claude Code has no IPC for Pause/Approve/etc. Polling owns
+  // card status; this handler just announces the limitation (5.4).
   const onAction = useCallback(
-    (id: string, action: CardAction) => {
+    (_id: string, _action: CardAction) => {
       toast.demo(
         'Actual control of running Claude Code processes is not available yet — this is a display-only action.'
-      );
-      setAgents((list) =>
-        list.map((a) => {
-          if (a.id !== id) return a;
-          switch (action) {
-            case 'pause':   return { ...a, status: 'waiting', last: 'paused by you — awaiting next move' };
-            case 'retry':   return { ...a, status: 'running', last: 'retrying previous step…' };
-            case 'approve': return { ...a, status: 'idle',    step: a.steps, last: 'approved by you · merged' };
-            case 'reject':  return { ...a, status: 'running', step: Math.max(0, a.step - 1), last: 'rejected — revising approach' };
-            case 'start':   return { ...a, status: 'running', started: 'just now', last: 'starting now…' };
-            case 'stop':    return { ...a, status: 'idle', last: 'stopped by you' };
-            default: return a;
-          }
-        })
       );
     },
     [toast]
@@ -220,7 +241,7 @@ export function App() {
             <ErrorState detail={errorDetail} onRetry={() => load(since)} />
           ) : filtered.length === 0 ? (
             <EmptyState
-              reason={pickEmptyReason({ agents, query, filter, since, projectsFound })}
+              reason={pickEmptyReason({ agents: displayAgents, query, filter, since, projectsFound })}
               status={filter !== 'all' ? (filter as Status) : undefined}
               query={query}
               onClearSearch={() => setQuery('')}
@@ -248,7 +269,7 @@ export function App() {
             </>
           )}
         </div>
-        <Sidebar agents={agents} activity={activity} onSelectAgent={setSelectedId} />
+        <Sidebar agents={displayAgents} activity={activity} onSelectAgent={setSelectedId} />
 
         {selectedAgent && (
           <DetailDrawer

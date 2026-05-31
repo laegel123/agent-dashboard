@@ -17,6 +17,7 @@ import { STATUS_META } from '@/lib/status-meta';
 import type { Agent, ChatMsg, Status } from '@/lib/types';
 import { Icon, StatusDot, fmtTok, fmt$ } from './dashboard-utils';
 import type { CardAction } from './dashboard-card';
+import { useToast } from './toast';
 
 // ─── Mock helpers (Phase 3 only) ─────────────────────────────────────────────
 
@@ -135,6 +136,25 @@ export function DetailDrawer({ agent, onClose, onAction, chats, onChatSend }: De
   const [tab, setTab] = useState<TabKey>('stream');
   const [draft, setDraft] = useState('');
   const chatRef = useRef<HTMLDivElement>(null);
+  const toast = useToast();
+
+  const onOpenFolder = async () => {
+    if (!agent.cwd) {
+      toast.info('No working directory recorded for this session.');
+      return;
+    }
+    try {
+      const res = await fetch('/api/open-folder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cwd: agent.cwd }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
+    } catch (e) {
+      toast.error(`Couldn't open folder: ${(e as Error).message}`);
+    }
+  };
 
   useEffect(() => {
     setTab('stream');
@@ -209,18 +229,35 @@ export function DetailDrawer({ agent, onClose, onAction, chats, onChatSend }: De
                 {agent.id} · {agent.model} · {agent.repo} · {agent.branch}
               </div>
             </div>
-            <button
-              onClick={onClose}
-              aria-label="Close detail drawer"
-              style={{
-                border: '1px solid var(--line-2)', background: 'transparent',
-                width: 30, height: 30, borderRadius: 8, cursor: 'pointer',
-                color: 'var(--ink-3)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}
-            >
-              <Icon name="x" size={13} />
-            </button>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button
+                onClick={onOpenFolder}
+                aria-label="Open working directory"
+                title={agent.cwd ? `Open ${agent.cwd}` : 'No working directory'}
+                disabled={!agent.cwd}
+                style={{
+                  border: '1px solid var(--line-2)', background: 'transparent',
+                  width: 30, height: 30, borderRadius: 8,
+                  cursor: agent.cwd ? 'pointer' : 'default',
+                  color: agent.cwd ? 'var(--ink-3)' : 'var(--ink-5)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <Icon name="folder" size={14} />
+              </button>
+              <button
+                onClick={onClose}
+                aria-label="Close detail drawer"
+                style={{
+                  border: '1px solid var(--line-2)', background: 'transparent',
+                  width: 30, height: 30, borderRadius: 8, cursor: 'pointer',
+                  color: 'var(--ink-3)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <Icon name="x" size={13} />
+              </button>
+            </div>
           </div>
 
           <div

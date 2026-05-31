@@ -13,6 +13,7 @@ import type { CSSProperties, MouseEvent, ReactNode } from 'react';
 import { STATUS_META } from '@/lib/status-meta';
 import type { Agent } from '@/lib/types';
 import { Icon } from './dashboard-utils';
+import { useToast } from './toast';
 
 // ─── Templates ───────────────────────────────────────────────────────────────
 
@@ -36,18 +37,25 @@ const TEMPLATES: Template[] = [
 ];
 
 export interface NewAgentDraft {
+  sessionId: string;   // client-generated UUID, also passed as claude --session-id
   name: string;
   task: string;
-  repo: string;
-  branch: string;
-  model: string;
-  autoStart: boolean;
+  cwd: string;         // absolute path (real spawn target)
+  branch: string;      // display-only for the optimistic card
+  model: string;       // display form e.g. 'opus-4.5'
 }
 
 export interface NewAgentModalProps {
   onClose: () => void;
   onCreate: (draft: NewAgentDraft) => void;
 }
+
+// Map the form's display model to the CLI alias the spawn API expects.
+const modelAlias = (m: string): 'opus' | 'sonnet' | 'haiku' => {
+  if (m.startsWith('haiku')) return 'haiku';
+  if (m.startsWith('sonnet')) return 'sonnet';
+  return 'opus';
+};
 
 const INPUT: CSSProperties = {
   width: '100%', padding: '8px 12px', borderRadius: 8,
@@ -68,21 +76,52 @@ export function NewAgentModal({ onClose, onCreate }: NewAgentModalProps) {
   const [tpl, setTpl] = useState('tpl-feature');
   const [name, setName] = useState('');
   const [task, setTask] = useState('');
-  const [repo, setRepo] = useState('acme/web');
+  const [cwd, setCwd] = useState('');
   const [branch, setBranch] = useState('');
   const [model, setModel] = useState('opus-4.5');
-  const [autoStart, setAutoStart] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const toast = useToast();
 
   useEffect(() => {
     const t = TEMPLATES.find((x) => x.id === tpl);
     if (t) setModel(t.defaultModel);
   }, [tpl]);
 
-  const canSubmit = !!(name.trim() && task.trim());
+  const canSubmit = !!(name.trim() && task.trim() && cwd.trim() && !submitting);
 
-  const submit = () => {
+  const submit = async () => {
     if (!canSubmit) return;
-    onCreate({ name: name.trim(), task: task.trim(), repo, branch: branch.trim(), model, autoStart });
+    const trimmedName = name.trim();
+    const trimmedTask = task.trim();
+    const trimmedCwd = cwd.trim();
+    const sessionId = crypto.randomUUID();
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/spawn', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId,
+          name: trimmedName,
+          task: trimmedTask,
+          cwd: trimmedCwd,
+          model: modelAlias(model),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
+      onCreate({
+        sessionId,
+        name: trimmedName,
+        task: trimmedTask,
+        cwd: trimmedCwd,
+        branch: branch.trim(),
+        model,
+      });
+    } catch (e) {
+      toast.error(`Spawn failed: ${(e as Error).message}`);
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -187,39 +226,22 @@ export function NewAgentModal({ onClose, onCreate }: NewAgentModalProps) {
                 style={{ ...INPUT, height: 80, resize: 'vertical', padding: '10px 12px', fontFamily: 'var(--sans)' }}
               />
             </FormField>
-            <FormField label="Repository">
-              <select value={repo} onChange={(e) => setRepo(e.target.value)} style={INPUT}>
-                <option>acme/web</option>
-                <option>acme/payments</option>
-                <option>acme/auth</option>
-                <option>acme/data</option>
-                <option>acme/design-system</option>
-              </select>
-            </FormField>
-            <FormField label="Branch" hint="leave blank to auto-create">
+            <FormField label="Working directory" hint="absolute path" full>
               <input
-                value={branch}
-                onChange={(e) => setBranch(e.target.value)}
-                placeholder="auto"
+                value={cwd}
+                onChange={(e) => setCwd(e.target.value)}
+                placeholder="/Users/you/workspace/your-repo"
                 style={{ ...INPUT, fontFamily: 'var(--mono)' }}
               />
             </FormField>
-          </div>
-
-          <div
-            style={{
-              marginTop: 18, padding: '12px 14px', borderRadius: 10,
-              background: 'var(--surface-2)', border: '1px solid var(--line)',
-              display: 'flex', alignItems: 'center', gap: 12,
-            }}
-          >
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: 'var(--ink-2)' }}>
-              <input type="checkbox" checked={autoStart} onChange={(e) => setAutoStart(e.target.checked)} />
-              Start immediately
-            </label>
-            <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>
-              (otherwise it stays Idle and waits for you to kick it off)
-            </span>
+            <FormField label="Branch" hint="display only (claude inherits the repo's branch)" full>
+              <input
+                value={branch}
+                onChange={(e) => setBranch(e.target.value)}
+                placeholder="—"
+                style={{ ...INPUT, fontFamily: 'var(--mono)' }}
+              />
+            </FormField>
           </div>
         </div>
 
@@ -240,7 +262,7 @@ export function NewAgentModal({ onClose, onCreate }: NewAgentModalProps) {
             disabled={!canSubmit}
             style={{ ...modalBtn(true), opacity: canSubmit ? 1 : 0.4 }}
           >
-            Spawn agent
+            {submitting ? 'Spawning…' : 'Spawn agent'}
           </button>
         </div>
       </div>
