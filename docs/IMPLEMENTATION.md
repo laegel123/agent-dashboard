@@ -273,17 +273,16 @@ export async function spawnClaudeSession(opts: SpawnOpts): Promise<{ ok: true; m
 
 ---
 
-## Phase 6 — 마무리
+## Phase 6 — 마무리 ✅ (핵심) / ⏳ (풀 테스트·Electron)
 
-- [ ] 에러 처리 정교화 (fs 오류 / API 오류 분기)
-- [ ] 빌드 검증 (`npm run build`)
-- [ ] 사용자용 `README.md` 작성 (설치/실행/스크린샷)
-- [ ] **UI 컴포넌트 테스트 (RTL) 15개 시나리오** — `docs/TESTING.md` §7
-- [ ] **전체 테스트 통과** — `npm test` 115개 케이스 모두 green
-- [ ] **커버리지 임계값 통과** — `npm run test:coverage` lib/* 80%+, API 70%+
-- [ ] **사람 눈 비주얼 검증** — `design-package` HTML 과 dev 서버 좌우 비교
-- [ ] ESLint: Next.js 기본만 (Prettier 별도 도입 X)
-- [ ] (선택) Electron 패키징 검토
+- [x] 에러 처리 — `/api/agents` try/catch 500, fs 부재 시 빈 응답 + `projectsFound:false`, `getCachedOrParse` 파일 단위 skip, spawn/open-folder 라우트 400/403/500 분기. Phase 4·5 에서 누적 적용 완료.
+- [x] 빌드 검증 — `npm run build` 통과 (4 라우트: `/`, `/api/agents`, `/api/spawn`, `/api/open-folder`).
+- [x] **사용자용 `README.md` 작성** — 상단 README + `docs/screenshots/dashboard.png`.
+- [x] ESLint: Next.js `core-web-vitals` — `.eslintrc.json` 셋업, `npm run lint` warnings/errors 0.
+- [x] **사람 눈 비주얼 검증** — Phase 4 verify 캡처 6장(7d/All/drawer/search-empty/loading/empty) + Phase 5 verify 2장(modal/folder btn). 디자인 원본과 시각 일치.
+- [ ] ⏳ **UI 컴포넌트 테스트 (RTL) 15개 시나리오** — `docs/TESTING.md` §7 후순위.
+- [ ] ⏳ **전체 115케이스 + 커버리지 임계값** — 현재 44 스모크 통과. 후순위.
+- [ ] ⏸ (선택) Electron 패키징 검토 — 보류.
 
 ---
 
