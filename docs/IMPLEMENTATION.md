@@ -115,7 +115,7 @@
 - [x] `lib/claude-logs.ts` — `getClaudeHome()`, `projectsRootExists()`, `scanProjects()`(subagents/ skip), `readSession()`(readline 스트리밍, 라인별 parse 실패 skip), `sessionEntrypoint()`, `sessionToAgent()`
 - [x] `lib/log-cache.ts` — mtime+size 캐시. 변경 없으면 캐시된 records 반환(재파싱 X, dev hit 로그). **status 는 캐시 안 함** — sessionToAgent 에서 매 요청 재추론. (byte-offset incremental 은 후속 최적화, 현재는 mtime 기준 whole-file 재읽기)
 
-- [~] **단위 테스트** — 핵심 스모크 30케이스 작성·통과 (`test/{pricing,status-deriver,claude-logs,format-time}.test.ts`). vitest 설치 + `npm test` 스크립트 추가. ⏳ **후속**: TESTING.md §5 풀세트 80케이스 + fixtures + 커버리지 임계값.
+- [x] **단위 테스트 75 케이스** (스펙 80 중 format-path 5 ⏸) — 풀 fixtures(`test/fixtures/claude-home-{normal,empty,broken,bom,root}`), HOME override, mtime 캐시 무효화, BOM/깨진 jsonl 처리, vi.mock child_process platform branch 검증.
 
 ### 4.2 API Routes ✅
 - [x] `app/api/agents/route.ts` — GET, `runtime='nodejs'`, `dynamic='force-dynamic'`, `Cache-Control: no-store`. since(7d/30d/all) cutoff + cli 필터 + lastTimestamp 정렬 + totals + `projectsFound` 플래그.
@@ -154,7 +154,7 @@
 - [x] ⭐ 사이드바 Hand-offs 그래프를 실 agent → 슬롯 매핑 (엣지는 데모, "demo data" 배지 유지)
 
 ### 4.4 API Route 통합 테스트 — `docs/TESTING.md` §6
-- [ ] ⏳ **후속**: `/api/agents` 8개 케이스 (entrypoint cli 필터, since 3종, 정렬, totals, 부분 실패) — 핵심 테스트 우선 결정으로 후순위.
+- [x] `/api/agents` 8 통합 케이스 — fixtures + isProcessAlive mock + 가짜 시간(2026-06-01). cli 필터, since 3종, 정렬, totals, 깨진 jsonl 부분 통과.
 
 **검증** — (전제 갱신: 이 머신은 CLI 세션 다수 — 7d 기본 2장, all 41장):
 - [x] **토큰 합 일치**: 29c9699d 카드 `tokens` = JSONL `input+output` 합 = **1,637,860** 정확 일치
@@ -260,9 +260,10 @@ export async function spawnClaudeSession(opts: SpawnOpts): Promise<{ ok: true; m
 - [x] `onAction` 의 6개 분기 setAgents 로직 완전 삭제, 토스트만 유지(폴링이 source of truth).
 - [ ] Activity 피드 이벤트 push — 현 단계 생략(Activity 는 여전히 데모 MOCK_ACTIVITY).
 
-### 5.5 통합 테스트 — `docs/TESTING.md` §6.2 / §6.3 ✅ (핵심 스모크)
+### 5.5 통합 테스트 — `docs/TESTING.md` §6.2 / §6.3 ✅
 - [x] `/api/spawn` — 10케이스 (Origin 부재/mismatch, body 검증 5종, 정상 path mocked spawnClaudeSession). 실 spawn 은 mock.
 - [x] `/api/open-folder` — 4케이스 (Origin/cwd 검증 + 정상 path mocked openFolder).
+- [x] lib 단위: spawn 10 (Win 4 + Darwin 2 + Linux 4 platform branch + arg quoting) + open-folder 4 (3 OS + 셸 메타문자 안전).
 - [x] vitest.config 에 `@` alias 추가(라우트 import 호환).
 
 **검증**:
@@ -280,8 +281,12 @@ export async function spawnClaudeSession(opts: SpawnOpts): Promise<{ ok: true; m
 - [x] **사용자용 `README.md` 작성** — 상단 README + `docs/screenshots/dashboard.png`.
 - [x] ESLint: Next.js `core-web-vitals` — `.eslintrc.json` 셋업, `npm run lint` warnings/errors 0.
 - [x] **사람 눈 비주얼 검증** — Phase 4 verify 캡처 6장(7d/All/drawer/search-empty/loading/empty) + Phase 5 verify 2장(modal/folder btn). 디자인 원본과 시각 일치.
-- [ ] ⏳ **UI 컴포넌트 테스트 (RTL) 15개 시나리오** — `docs/TESTING.md` §7 후순위.
-- [ ] ⏳ **전체 115케이스 + 커버리지 임계값** — 현재 44 스모크 통과. 후순위.
+- [x] **UI 컴포넌트 테스트 (RTL) 15개 시나리오** — jsdom + RTL + userEvent. `test/components.test.tsx` 15 케이스 통과.
+- [x] **풀 테스트 + 커버리지 임계값** — **112케이스 통과** (115 중 format-path 5 = 모듈 미존재 ⏸).
+  - lib: pricing 12 + status-deriver 11 + sessions-meta 9 + claude-logs 16 + log-cache 6 + spawn 10 + open-folder 4 + format-time 7 = **75**
+  - API: agents 8 + spawn 10 + open-folder 4 = **22**
+  - UI/RTL: **15**
+  - `npm run test:coverage`: lib 라인 **95.57%** / 함수 **100%** (목표 80/90), API 라인 **88-97%** (목표 70) — 모두 압도적 통과.
 - [ ] ⏸ (선택) Electron 패키징 검토 — 보류.
 
 ---
