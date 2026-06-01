@@ -42,12 +42,29 @@ describe('calculateCost', () => {
 });
 
 describe('shortModel', () => {
-  it('shortens claude ids', () => {
+  it('claude-opus-4-7 → opus-4.7', () => {
     expect(shortModel('claude-opus-4-7')).toBe('opus-4.7');
+  });
+  it('claude-sonnet-4-6 → sonnet-4.6', () => {
     expect(shortModel('claude-sonnet-4-6')).toBe('sonnet-4.6');
+  });
+  it('claude-haiku-4-5 → haiku-4.5', () => {
+    expect(shortModel('claude-haiku-4-5')).toBe('haiku-4.5');
+  });
+  it('full dated ID claude-haiku-4-5-20251001 → haiku-4.5', () => {
     expect(shortModel('claude-haiku-4-5-20251001')).toBe('haiku-4.5');
   });
   it('returns unknown shapes unchanged', () => {
     expect(shortModel('<synthetic>')).toBe('<synthetic>');
+  });
+});
+
+describe('calculateCost — zero tokens', () => {
+  it('all-zero usage → $0', () => {
+    const cost = calculateCost(
+      { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
+      'claude-opus-4-7'
+    );
+    expect(cost).toBe(0);
   });
 });

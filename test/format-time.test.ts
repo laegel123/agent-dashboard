@@ -20,6 +20,14 @@ describe('relativeTime', () => {
     expect(relativeTime(ago(45 * 3600 + 14 * 60), NOW)).toBe('1d 21h');
     expect(relativeTime(ago(2 * 86400), NOW)).toBe('2d');
   });
+
+  it('59m → 59m boundary', () => {
+    expect(relativeTime(ago(59 * 60), NOW)).toBe('59m');
+  });
+
+  it('exactly 1h → 1h (no minutes)', () => {
+    expect(relativeTime(ago(3600), NOW)).toBe('1h');
+  });
 });
 
 describe('formatClock', () => {

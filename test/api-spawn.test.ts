@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import os from 'node:os';
+// project root always exists, so this passes the cwd `isDirectory()` check
+const REAL_DIR = process.cwd();
 
 // Replace the spawn lib so tests never actually open a terminal window.
 vi.mock('@/lib/spawn', () => ({
@@ -10,7 +11,6 @@ import { POST } from '../app/api/agents/../spawn/route';
 import { spawnClaudeSession } from '@/lib/spawn';
 
 const OK_ORIGIN = 'http://127.0.0.1:3000';
-const HOME = os.homedir();
 const UUID = '11111111-2222-3333-4444-555555555555';
 
 const post = (body: unknown, headers: Record<string, string> = { origin: OK_ORIGIN }) =>
@@ -28,13 +28,13 @@ beforeEach(() => {
 
 describe('POST /api/spawn — Origin enforcement (ADR-015)', () => {
   it('rejects missing Origin with 403', async () => {
-    const res = await post({ sessionId: UUID, name: 'x', model: 'opus', cwd: HOME }, {});
+    const res = await post({ sessionId: UUID, name: 'x', model: 'opus', cwd: REAL_DIR }, {});
     expect(res.status).toBe(403);
     expect(spawnClaudeSession).not.toHaveBeenCalled();
   });
   it('rejects unknown Origin with 403', async () => {
     const res = await post(
-      { sessionId: UUID, name: 'x', model: 'opus', cwd: HOME },
+      { sessionId: UUID, name: 'x', model: 'opus', cwd: REAL_DIR },
       { origin: 'https://evil.example' }
     );
     expect(res.status).toBe(403);
@@ -48,16 +48,16 @@ describe('POST /api/spawn — body validation', () => {
     expect((await res.json()).error).toMatch(/JSON/i);
   });
   it('rejects bad sessionId', async () => {
-    const res = await post({ sessionId: 'not-a-uuid', name: 'x', model: 'opus', cwd: HOME });
+    const res = await post({ sessionId: 'not-a-uuid', name: 'x', model: 'opus', cwd: REAL_DIR });
     expect(res.status).toBe(400);
     expect((await res.json()).error).toMatch(/UUID/i);
   });
   it('rejects missing name', async () => {
-    const res = await post({ sessionId: UUID, name: '   ', model: 'opus', cwd: HOME });
+    const res = await post({ sessionId: UUID, name: '   ', model: 'opus', cwd: REAL_DIR });
     expect(res.status).toBe(400);
   });
   it('rejects unknown model', async () => {
-    const res = await post({ sessionId: UUID, name: 'x', model: 'gpt-4', cwd: HOME });
+    const res = await post({ sessionId: UUID, name: 'x', model: 'gpt-4', cwd: REAL_DIR });
     expect(res.status).toBe(400);
     expect((await res.json()).error).toMatch(/opus.*sonnet.*haiku/);
   });
@@ -72,17 +72,17 @@ describe('POST /api/spawn — body validation', () => {
   });
   it('rejects task > 500 chars', async () => {
     const res = await post({
-      sessionId: UUID, name: 'x', model: 'opus', cwd: HOME, task: 'a'.repeat(501),
+      sessionId: UUID, name: 'x', model: 'opus', cwd: REAL_DIR, task: 'a'.repeat(501),
     });
     expect(res.status).toBe(400);
   });
   it('accepts a valid body and calls spawnClaudeSession exactly once', async () => {
-    const res = await post({ sessionId: UUID, name: 'demo', model: 'opus', cwd: HOME, task: 'do the thing' });
+    const res = await post({ sessionId: UUID, name: 'demo', model: 'opus', cwd: REAL_DIR, task: 'do the thing' });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, method: 'mock' });
     expect(spawnClaudeSession).toHaveBeenCalledTimes(1);
     expect(spawnClaudeSession).toHaveBeenCalledWith({
-      sessionId: UUID, name: 'demo', model: 'opus', cwd: HOME, task: 'do the thing',
+      sessionId: UUID, name: 'demo', model: 'opus', cwd: REAL_DIR, task: 'do the thing',
     });
   });
 });

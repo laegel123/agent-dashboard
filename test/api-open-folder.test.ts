@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import os from 'node:os';
+const REAL_DIR = process.cwd();
 
 vi.mock('@/lib/open-folder', () => ({
   openFolder: vi.fn(async (cwd: string) => ({ ok: true, method: `mock:${cwd}` })),
@@ -9,7 +9,6 @@ import { POST } from '../app/api/open-folder/route';
 import { openFolder } from '@/lib/open-folder';
 
 const OK_ORIGIN = 'http://127.0.0.1:3000';
-const HOME = os.homedir();
 
 const post = (body: unknown, headers: Record<string, string> = { origin: OK_ORIGIN }) =>
   POST(
@@ -24,7 +23,7 @@ beforeEach(() => vi.mocked(openFolder).mockClear());
 
 describe('POST /api/open-folder', () => {
   it('rejects missing Origin with 403', async () => {
-    const res = await post({ cwd: HOME }, {});
+    const res = await post({ cwd: REAL_DIR }, {});
     expect(res.status).toBe(403);
     expect(openFolder).not.toHaveBeenCalled();
   });
@@ -37,9 +36,9 @@ describe('POST /api/open-folder', () => {
     expect(res.status).toBe(400);
   });
   it('accepts an existing absolute dir and calls openFolder', async () => {
-    const res = await post({ cwd: HOME });
+    const res = await post({ cwd: REAL_DIR });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, method: `mock:${HOME}` });
-    expect(openFolder).toHaveBeenCalledWith(HOME);
+    expect(await res.json()).toEqual({ ok: true, method: `mock:${REAL_DIR}` });
+    expect(openFolder).toHaveBeenCalledWith(REAL_DIR);
   });
 });

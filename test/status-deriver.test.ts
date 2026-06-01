@@ -57,4 +57,26 @@ describe('deriveStatus', () => {
     ];
     expect(deriveStatus(records, aliveMeta, NOW)).toBe('running');
   });
+
+  it('meta 있지만 PID dead → idle', () => {
+    // 절대 살아있지 않을 PID 로 isProcessAlive 가 false → idle
+    const deadMeta = { ...aliveMeta, pid: 99999999 };
+    const records = [rec({ type: 'assistant', timestamp: iso(5), message: { stop_reason: 'tool_use' } as never })];
+    expect(deriveStatus(records, deadMeta, NOW)).toBe('idle');
+  });
+
+  it('alive + top-level tool_result + ageSec < 60 → running', () => {
+    const records = [rec({ type: 'tool_result', timestamp: iso(10) })];
+    expect(deriveStatus(records, aliveMeta, NOW)).toBe('running');
+  });
+
+  it('alive + top-level tool_result + ageSec >= 60 → waiting', () => {
+    const records = [rec({ type: 'tool_result', timestamp: iso(120) })];
+    expect(deriveStatus(records, aliveMeta, NOW)).toBe('waiting');
+  });
+
+  it('alive + 알 수 없는 type (thinking) → default waiting (core record 없음)', () => {
+    const records = [rec({ type: 'thinking', timestamp: iso(5) })];
+    expect(deriveStatus(records, aliveMeta, NOW)).toBe('waiting');
+  });
 });

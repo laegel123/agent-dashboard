@@ -1,7 +1,10 @@
-import { describe, it, expect } from 'vitest';
-import { sessionToAgent, sessionEntrypoint } from '../lib/claude-logs';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import path from 'node:path';
+import { sessionToAgent, sessionEntrypoint, scanProjects, readSession } from '../lib/claude-logs';
 import type { JsonlRecord } from '../lib/types';
 import type { SessionMeta } from '../lib/sessions-meta';
+
+const FIX = (name: string) => path.resolve(__dirname, 'fixtures', name);
 
 const rec = (o: Record<string, unknown>) => o as unknown as JsonlRecord;
 
@@ -88,5 +91,78 @@ describe('sessionEntrypoint', () => {
   it('live meta entrypoint wins', () => {
     const meta = { entrypoint: 'claude-desktop' } as SessionMeta;
     expect(sessionEntrypoint(records, meta)).toBe('claude-desktop');
+  });
+});
+
+// ─── Filesystem-backed cases (fixtures) ───
+
+describe('scanProjects', () => {
+  let originalHome: string | undefined;
+  beforeEach(() => { originalHome = process.env.HOME; });
+  afterEach(() => { process.env.HOME = originalHome; });
+
+  it('claude-home-normal → 3 jsonl 경로 (서브에이전트 없음)', async () => {
+    process.env.HOME = FIX('claude-home-normal');
+    const files = await scanProjects();
+    expect(files.length).toBe(3);
+    expect(files.every((f) => f.endsWith('.jsonl'))).toBe(true);
+  });
+
+  it('claude-home-empty (projects 폴더 없음) → []', async () => {
+    process.env.HOME = FIX('claude-home-empty');
+    expect(await scanProjects()).toEqual([]);
+  });
+});
+
+describe('readSession', () => {
+  it('BOM 시작 → 첫 라인 정상 파싱', async () => {
+    const file = path.join(
+      FIX('claude-home-bom'),
+      '.claude/projects/-Users-test-workspace-app1/eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee.jsonl'
+    );
+    const records = await readSession(file);
+    expect(records.length).toBe(1);
+    expect(records[0].type).toBe('user');
+  });
+
+  it('마지막 라인 깨진 jsonl → 그 라인만 skip', async () => {
+    const file = path.join(
+      FIX('claude-home-broken'),
+      '.claude/projects/-Users-test-workspace-app1/dddddddd-dddd-dddd-dddd-dddddddddddd.jsonl'
+    );
+    const records = await readSession(file);
+    expect(records.length).toBe(2);
+    expect(records.map((r) => r.type)).toEqual(['user', 'assistant']);
+  });
+});
+
+describe('sessionToAgent — edge cases', () => {
+  it('assistant 레코드 0 → tokens=0, cost=0, edited=0', () => {
+    const onlyUser: JsonlRecord[] = [
+      rec({ type: 'user', timestamp: '2026-05-01T00:00:00.000Z', entrypoint: 'cli', cwd: '/x', message: { content: 'hi' } }),
+    ];
+    const a = sessionToAgent('/p/zzzz-zzzz-zzzz-zzzz-zzzzzzzz.jsonl', onlyUser, new Map());
+    expect(a.tokens).toBe(0);
+    expect(a.cost).toBe(0);
+    expect(a.edited).toBe(0);
+  });
+
+  it('tool_use 가 Bash 뿐이면 edited=0 (Edit/Write 류만 카운트)', () => {
+    const bashOnly: JsonlRecord[] = [
+      rec({
+        type: 'assistant', timestamp: '2026-05-01T00:00:05.000Z',
+        message: {
+          model: 'claude-opus-4-7', stop_reason: 'tool_use', requestId: 'r',
+          usage: { input_tokens: 10, output_tokens: 10, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
+          content: [
+            { type: 'tool_use', name: 'Bash', input: { command: 'ls' } },
+            { type: 'tool_use', name: 'Read', input: { file_path: '/a' } },
+          ],
+        },
+      }),
+    ];
+    const a = sessionToAgent('/p/zzzz-zzzz-zzzz-zzzz-zzzzzzzz.jsonl', bashOnly, new Map());
+    expect(a.edited).toBe(0);
+    expect(a.step).toBe(2); // Bash + Read counted as tool_use
   });
 });
