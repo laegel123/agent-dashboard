@@ -28,3 +28,5 @@ design-package.tar.gz
 
 # claude-related local state
 .claude/
+# …but DO track the fixture homes used by the test suite
+!test/fixtures/**/.claude/
